@@ -17,8 +17,9 @@ class TextRedirector(object):
         self.tb.see(tk.END)
         self.tb.configure(state= 'disabled')
 
-def generateDropLog(tb, xltf, dlf, kwf, isVerbose):
+def generateDropLog(tb, tesspath, xltf, dlf, kwf, isVerbose):
     bosses = ['Lotus', 'Damien', 'Lucid', 'Will', 'Divine King Slime', 'Dusk', 'Djunkel', 'Heretic Hilla', 'Black Mage', 'Seren', 'Kalos', 'Kaling']  
+    pytesseract.pytesseract.tesseract_cmd = tesspath.get()
     xltfile = xltf.get()
     dlfile = dlf.get()
     kwfile = kwf.get()
@@ -137,40 +138,46 @@ def main():
     frame2 = tk.Frame(master= window)
     frame3 = tk.Frame(master= window)
     isVerbose = tk.BooleanVar(window)
+    tessinstall = tk.StringVar(window)
     xltfile = tk.StringVar(window)
     dlfile = tk.StringVar(window)
     kwfile = tk.StringVar(window)
     cfg = cp.ConfigParser()
-    
     isVerbose.set(False)
-    
-    if os.path.exists(tesseract_path := r'%LOCALAPPDATA%\Tesseract-OCR\tesseract.exe'):
-        pytesseract.pytesseract.tesseract_cmd = tesseract_path
     
     try:
         cfg.read('dlconfig.ini')
         files = cfg['Files']
+        tessinstall.set(files['tesseract_install'])
         xltfile.set(files['xltfile'])
         dlfile.set(files['dlfile'])
         kwfile.set(files['kwfile'])
     except (FileNotFoundError, KeyError) as e:
         cfg.add_section('Files')
+        if os.path.exists(os.getenv('LOCALAPPDATA') + r'\Tesseract-OCR\tesseract.exe'):
+            cfg.set('Files', 'tesseract_install', os.getenv('LOCALAPPDATA') + r'\Tesseract-OCR\tesseract.exe')
+        elif os.path.exists(os.getenv('LOCALAPPDATA') + r'\Programs\Tesseract-OCR\tesseract.exe'):
+            cfg.set('Files', 'tesseract_install', os.getenv('LOCALAPPDATA') + r'\Programs\Tesseract-OCR\tesseract.exe')
+        else:
+            cfg.set('Files', 'tesseract_install', '')
         cfg.set('Files', 'xltfile', '')
         cfg.set('Files', 'dlfile', '')
         cfg.set('Files', 'kwfile', '')
         with open('dlconfig.ini', 'w') as cfgfile:
             cfg.write(cfgfile)
     
+    showTesseractInstallLabel = ttk.Label(master= frame2, text= tessinstall.get())
     showCurrentExcelLabel = ttk.Label(master= frame2, text= xltfile.get())
     showCurrentDropListLabel = ttk.Label(master= frame2, text= dlfile.get())
     showCurrentKeywordsLabel = ttk.Label(master= frame2, text= kwfile.get())
     
+    locateTesseractInstallButton = ttk.Button(master= frame1, text= 'Locate Tesseract installation', width= 30, command= lambda: readFile(cfg, showTesseractInstallLabel, 'xltfile', tessinstall, 'Locate Tesseract installation', [('Executable files', '.exe')]))
     loadExcelButton = ttk.Button(master= frame1, text= 'Load Excel template', width= 30, command= lambda: readFile(cfg, showCurrentExcelLabel, 'xltfile', xltfile, 'Select Excel template', [('Template', '.xltx'), ('Template (code)', '.xltm'), ('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')]))
     loadDropListButton = ttk.Button(master= frame1, text= 'Load drop list', width= 30, command= lambda: readFile(cfg, showCurrentDropListLabel, 'dlfile', dlfile, 'Select drop list text file', [('Text file', '.txt'), ('All files', '.*')]))
     loadKeywordsButton = ttk.Button(master= frame1, text= 'Load keywords', width= 30, command= lambda: readFile(cfg, showCurrentKeywordsLabel, 'kwfile', kwfile, 'Select keywords text file', [('Text file', '.txt'), ('All files', '.*')]))
     isVerboseButton = ttk.Checkbutton(master= frame1, text= 'Verbose', variable= isVerbose)
     
-    generateDropLogButton = ttk.Button(master= frame1, text= 'Generate Excel sheet', width= 30, command= lambda: generateDropLog(textbox, xltfile, dlfile, kwfile, isVerbose.get()))
+    generateDropLogButton = ttk.Button(master= frame1, text= 'Generate Excel sheet', width= 30, command= lambda: generateDropLog(textbox, tessinstall, xltfile, dlfile, kwfile, isVerbose.get()))
     textbox = tk.Text(master= frame3, font= ('Consolas', 10), wrap= tk.NONE, state= 'disabled')
     vert_scrollbar = ttk.Scrollbar(master= frame3, orient= 'vertical', command= textbox.yview)
     hori_scrollbar = ttk.Scrollbar(master= frame3, orient= 'horizontal', command= textbox.xview)
@@ -179,20 +186,23 @@ def main():
     frame2.pack()
     frame3.pack(side= 'bottom', fill= 'both', expand= True)
     
-    loadExcelButton.grid(row= 1, column= 1)
-    loadDropListButton.grid(row= 1, column= 2)
-    loadKeywordsButton.grid(row= 1, column= 3)
-    generateDropLogButton.grid(row= 2, column= 1, columnspan= 2)
-    isVerboseButton.grid(row= 2, column= 3, sticky= 'w')
+    locateTesseractInstallButton.grid(row= 1, column= 1)
+    loadExcelButton.grid(row= 1, column= 2)
+    loadDropListButton.grid(row= 2, column= 1)
+    loadKeywordsButton.grid(row= 2, column= 2)
+    generateDropLogButton.grid(row= 3, column= 1)
+    isVerboseButton.grid(row= 3, column= 2)
     
     frame2.columnconfigure(1, weight= 1)
     frame2.columnconfigure(2, weight= 1)
-    ttk.Label(master= frame2, text= 'Selected Excel template:', width= 25).grid(row= 1, column= 1, sticky= 'w')
-    showCurrentExcelLabel.grid(row= 1, column= 2, sticky= 'w')
-    ttk.Label(master= frame2, text= 'Selected drop list file:', width= 25).grid(row= 2, column= 1, sticky= 'w')
-    showCurrentDropListLabel.grid(row= 2, column= 2, sticky= 'w')
-    ttk.Label(master= frame2, text= 'Selected keywords file:', width= 25).grid(row= 3, column= 1, sticky= 'w')
-    showCurrentKeywordsLabel.grid(row= 3, column= 2, sticky= 'w')
+    ttk.Label(master= frame2, text= 'Tesseract install location:', width= 25).grid(row= 1, column= 1, sticky= 'w')
+    showTesseractInstallLabel.grid(row= 1, column= 2, sticky= 'w')
+    ttk.Label(master= frame2, text= 'Selected Excel template:', width= 25).grid(row= 2, column= 1, sticky= 'w')
+    showCurrentExcelLabel.grid(row= 2, column= 2, sticky= 'w')
+    ttk.Label(master= frame2, text= 'Selected drop list file:', width= 25).grid(row= 3, column= 1, sticky= 'w')
+    showCurrentDropListLabel.grid(row= 3, column= 2, sticky= 'w')
+    ttk.Label(master= frame2, text= 'Selected keywords file:', width= 25).grid(row= 4, column= 1, sticky= 'w')
+    showCurrentKeywordsLabel.grid(row= 4, column= 2, sticky= 'w')
     
     frame3.rowconfigure(0, weight= 1)
     frame3.columnconfigure(0, weight= 1)
