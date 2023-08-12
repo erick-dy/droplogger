@@ -38,7 +38,7 @@ def generateDropLog(tb, xltf, dlf, kwf, isVerbose):
     except FileNotFoundError as e:
         print(e)
         return
-    with open(kwfile := 'keywords.txt') as kw:
+    with open(kwfile) as kw:
         for line in kw:
             keywords.append(line.rstrip('\n'))
     
@@ -63,15 +63,16 @@ def generateDropLog(tb, xltf, dlf, kwf, isVerbose):
         # Pass processed image to Tesseract OCR
         print('Detecting text in', img_name, '... ', end='')
         output = pytesseract.image_to_string(blur, lang='eng',config='--psm 4 --oem 1')
-        rep = re.sub('v¥|¥V|WY|YY|VV|VY|vY|WV|vv|\"W|\'\'W', 'W', output) # This regex corrects the problematic capital W in the source image
-        drops = rep.split('\n')
+        rep1 = re.sub('v¥|¥V|WY|YY|VV|VY|vY|WV|vv|\"W|\'\'W', 'W', output) # This regex corrects the problematic capital W in the source image
+        rep2 = re.sub('vy', 'w', rep1)
+        drops = rep2.split('\n')
         drops = list(filter(None, drops))
         print('Done!')
         
         if isVerbose is True:
             print('Tesseract output:', dash := '----------------------------------------', *drops, dash, sep='\n')
         
-        with open(dlfile := 'droplist.txt') as dl:
+        with open(dlfile) as dl:
             for line in dl:
                 drop_list[line.rstrip('\n')] = 0
         
@@ -103,7 +104,7 @@ def generateDropLog(tb, xltf, dlf, kwf, isVerbose):
     rows = dataframe_to_rows(df, index= False)
     for r, row in enumerate(rows, 1):
         for c, value in enumerate(row, 1):
-            ws.cell(row= r, column= c, value= value).alignment = Alignment(horizontal= 'center')
+            ws.cell(row= r, column= c, value= value).alignment = Alignment(horizontal= 'center', wrap_text= True)
     wb.template = False
     print('Writing drop data to', (os.path.basename(xl := asksaveasfilename(title= 'Save Excel file', filetypes= [('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')], defaultextension= '.xlsx'))),'... ', end='')
     wb.save(xl)
@@ -142,6 +143,9 @@ def main():
     cfg = cp.ConfigParser()
     
     isVerbose.set(False)
+    
+    if os.path.exists(tesseract_path := r'%LOCALAPPDATA%\Tesseract-OCR\tesseract.exe'):
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
     
     try:
         cfg.read('dlconfig.ini')
