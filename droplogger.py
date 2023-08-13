@@ -1,5 +1,6 @@
-import errno, os, re, sys, tkinter as tk
+import datetime, os, re, sys, tkinter as tk
 import configparser as cp, cv2, numpy as np, openpyxl, pandas as pd, pytesseract
+from copy import copy
 from openpyxl.styles import Alignment
 from openpyxl.utils.dataframe import dataframe_to_rows
 from tkinter import ttk
@@ -17,19 +18,22 @@ class TextRedirector(object):
         self.tb.see(tk.END)
         self.tb.configure(state= 'disabled')
 
-def generateDropLog(tb, xltf, dlf, kwf, isVerbose):
-    bosses = ['Lotus', 'Damien', 'Lucid', 'Will', 'Divine King Slime', 'Dusk', 'Djunkel', 'Heretic Hilla', 'Black Mage', 'Seren', 'Kalos', 'Kaling']  
+def generateDropLog(tb, tesspath, xltf, dlf, kwf, isVerbose, createNewWorkbook):
+    bosses = ['Lotus', 'Damien', 'Lucid', 'Will', 'Divine King Slime', 'Dusk', 'Djunkel', 'Heretic Hilla', 'Black Mage', 'Seren', 'Kalos', 'Kaling']
+    pytesseract.pytesseract.tesseract_cmd = tesspath.get()
     xltfile = xltf.get()
     dlfile = dlf.get()
     kwfile = kwf.get()
     keywords = []
     images = []
+    time = datetime.datetime.now()
     
     tb.configure(state="normal")
     tb.delete(1.0, tk.END)
     tb.configure(state="disabled")
     
     wb, ws, df = createDataFrame(xltfile)
+    ws.title = time.strftime('%d %b %Y %H-%M')
     
     try:
         images.extend(askopenfilenames(title='Select image files to process', initialdir=os.getcwd(), filetypes=[('Image files', '.jpg .jpeg .png .bmp .tiff')]))
@@ -100,15 +104,38 @@ def generateDropLog(tb, xltf, dlf, kwf, isVerbose):
         with pd.option_context('expand_frame_repr', False, 'display.max_rows', None, 'display.max_columns', None, 'display.width', 0, 'display.max_colwidth', 0):
             print(df, end= '\n\n')
     
-    # Write DataFrame contents to Excel worksheet
+    # Write DataFrame contents to Excel sheet
     rows = dataframe_to_rows(df, index= False)
-    for r, row in enumerate(rows, 1):
-        for c, value in enumerate(row, 1):
-            ws.cell(row= r, column= c, value= value).alignment = Alignment(horizontal= 'center', wrap_text= True)
-    wb.template = False
-    print('Writing drop data to', (os.path.basename(xl := asksaveasfilename(title= 'Save Excel file', filetypes= [('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')], defaultextension= '.xlsx'))),'... ', end='')
-    wb.save(xl)
-    print('Done!')
+
+    if createNewWorkbook is True:
+        for r, row in enumerate(rows, 1):
+            for c, value in enumerate(row, 1):
+                ws.cell(row= r, column= c, value= value).alignment = Alignment(horizontal= 'center', wrap_text= True)
+        wb.template = False
+        print('Writing extracted drop data to new Workbook:', (os.path.basename(xl := asksaveasfilename(title= 'Create new Excel Workbook', filetypes= [('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')], defaultextension= '.xlsx'))),'... ', end='')
+        wb.save(xl)
+        print('Done!')
+    else:
+        # Default behaviour creates a new sheet in an existing Workbook
+        wb2 = openpyxl.load_workbook(xl := askopenfilename(title= 'Select Excel Workbook to write new sheet to', initialdir= os.getcwd(), filetypes= [('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')]))
+        ws2 = wb2.create_sheet(time.strftime('%d %b %Y %H-%M')) # Sheets cannot be copied wholesale between two different Workbooks
+        ws2.freeze_panes = 'F1'
+        for r, row in enumerate(rows, 1):
+            for c, value in enumerate(row, 1):
+                ws2.cell(row= r, column= c, value= value).alignment = Alignment(horizontal= 'center', wrap_text= True)
+                # Copy formatting from Excel template to new sheet
+                if ws.cell(row= r, column= c, value= value).has_style:
+                    ws2.cell(row= r, column= c, value= value).font = copy(ws.cell(row= r, column= c, value= value).font)
+                    ws2.cell(row= r, column= c, value= value).fill = copy(ws.cell(row= r, column= c, value= value).fill)
+                    ws2.cell(row= r, column= c, value= value).number_format = copy(ws.cell(row= r, column= c, value= value).number_format)
+        for i, rd in ws.row_dimensions.items():
+            ws2.row_dimensions[i] = copy(rd)
+        for i, cd in ws.column_dimensions.items():
+            ws2.column_dimensions[i] = copy(cd)
+        wb2.template = False
+        print('Writing extracted drop data to', os.path.basename(xl),'... ', end='')
+        wb2.save(xl)
+        print('Done!')
   
 # Create a Pandas DataFrame using an Excel template  
 def createDataFrame(xltfile):
@@ -120,6 +147,11 @@ def createDataFrame(xltfile):
     df = df[1:]
     df.columns = columnNames
     return (wb, ws, df)
+
+def setBoolean(cfg, bool, boolname):
+    cfg.set('Booleans', boolname, bool)
+    with open('dlconfig.ini', 'w') as cfgfile:
+        cfg.write(cfgfile)
 
 def readFile(cfg, label, filevar, filename, Title, types):
     filename.set(askopenfilename(title= Title, initialdir= os.getcwd(), filetypes= types))
@@ -136,41 +168,54 @@ def main():
     frame1 = tk.Frame(master= window)
     frame2 = tk.Frame(master= window)
     frame3 = tk.Frame(master= window)
+    createNewWorkbook = tk.BooleanVar(window)
     isVerbose = tk.BooleanVar(window)
+    tessinstall = tk.StringVar(window)
     xltfile = tk.StringVar(window)
     dlfile = tk.StringVar(window)
     kwfile = tk.StringVar(window)
     cfg = cp.ConfigParser()
     
-    isVerbose.set(False)
-    
-    if os.path.exists(tesseract_path := r'%LOCALAPPDATA%\Tesseract-OCR\tesseract.exe'):
-        pytesseract.pytesseract.tesseract_cmd = tesseract_path
-    
     try:
         cfg.read('dlconfig.ini')
         files = cfg['Files']
+        booleans = cfg['Booleans']
+        tessinstall.set(files['tesseract_install'])
         xltfile.set(files['xltfile'])
         dlfile.set(files['dlfile'])
         kwfile.set(files['kwfile'])
+        createNewWorkbook.set(booleans.getboolean('createNewWorkbook'))
+        isVerbose.set(booleans.getboolean('isVerbose'))
     except (FileNotFoundError, KeyError) as e:
         cfg.add_section('Files')
+        cfg.add_section('Booleans')
+        if os.path.exists(os.getenv('LOCALAPPDATA') + r'\Tesseract-OCR\tesseract.exe'):
+            cfg.set('Files', 'tesseract_install', os.getenv('LOCALAPPDATA') + r'\Tesseract-OCR\tesseract.exe')
+        elif os.path.exists(os.getenv('LOCALAPPDATA') + r'\Programs\Tesseract-OCR\tesseract.exe'):
+            cfg.set('Files', 'tesseract_install', os.getenv('LOCALAPPDATA') + r'\Programs\Tesseract-OCR\tesseract.exe')
+        else:
+            cfg.set('Files', 'tesseract_install', '')
         cfg.set('Files', 'xltfile', '')
         cfg.set('Files', 'dlfile', '')
         cfg.set('Files', 'kwfile', '')
+        cfg.set('Booleans', 'createNewWorkbook', 'False')
+        cfg.set('Booleans', 'isVerbose', 'False')
         with open('dlconfig.ini', 'w') as cfgfile:
             cfg.write(cfgfile)
     
+    showTesseractInstallLabel = ttk.Label(master= frame2, text= tessinstall.get())
     showCurrentExcelLabel = ttk.Label(master= frame2, text= xltfile.get())
     showCurrentDropListLabel = ttk.Label(master= frame2, text= dlfile.get())
     showCurrentKeywordsLabel = ttk.Label(master= frame2, text= kwfile.get())
     
+    locateTesseractInstallButton = ttk.Button(master= frame1, text= 'Locate Tesseract installation', width= 30, command= lambda: readFile(cfg, showTesseractInstallLabel, 'tesseract_install', tessinstall, 'Locate Tesseract installation', [('Executable files', '.exe')]))
     loadExcelButton = ttk.Button(master= frame1, text= 'Load Excel template', width= 30, command= lambda: readFile(cfg, showCurrentExcelLabel, 'xltfile', xltfile, 'Select Excel template', [('Template', '.xltx'), ('Template (code)', '.xltm'), ('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')]))
     loadDropListButton = ttk.Button(master= frame1, text= 'Load drop list', width= 30, command= lambda: readFile(cfg, showCurrentDropListLabel, 'dlfile', dlfile, 'Select drop list text file', [('Text file', '.txt'), ('All files', '.*')]))
     loadKeywordsButton = ttk.Button(master= frame1, text= 'Load keywords', width= 30, command= lambda: readFile(cfg, showCurrentKeywordsLabel, 'kwfile', kwfile, 'Select keywords text file', [('Text file', '.txt'), ('All files', '.*')]))
-    isVerboseButton = ttk.Checkbutton(master= frame1, text= 'Verbose', variable= isVerbose)
+    isVerboseButton = ttk.Checkbutton(master= frame1, text= 'Verbose', variable= isVerbose, command= lambda: setBoolean(cfg, str(isVerbose.get()), 'isVerbose'))
+    createNewWorkbookButton = ttk.Checkbutton(master= frame1, text= 'Create new Excel Workbook', variable= createNewWorkbook, command= lambda: setBoolean(cfg, str(createNewWorkbook.get()), 'createNewWorkbook'))
     
-    generateDropLogButton = ttk.Button(master= frame1, text= 'Generate Excel sheet', width= 30, command= lambda: generateDropLog(textbox, xltfile, dlfile, kwfile, isVerbose.get()))
+    generateDropLogButton = ttk.Button(master= frame1, text= 'Generate Excel sheet', width= 30, command= lambda: generateDropLog(textbox, tessinstall, xltfile, dlfile, kwfile, isVerbose.get(), createNewWorkbook.get()))
     textbox = tk.Text(master= frame3, font= ('Consolas', 10), wrap= tk.NONE, state= 'disabled')
     vert_scrollbar = ttk.Scrollbar(master= frame3, orient= 'vertical', command= textbox.yview)
     hori_scrollbar = ttk.Scrollbar(master= frame3, orient= 'horizontal', command= textbox.xview)
@@ -179,20 +224,24 @@ def main():
     frame2.pack()
     frame3.pack(side= 'bottom', fill= 'both', expand= True)
     
-    loadExcelButton.grid(row= 1, column= 1)
-    loadDropListButton.grid(row= 1, column= 2)
-    loadKeywordsButton.grid(row= 1, column= 3)
-    generateDropLogButton.grid(row= 2, column= 1, columnspan= 2)
-    isVerboseButton.grid(row= 2, column= 3, sticky= 'w')
-    
+    locateTesseractInstallButton.grid(row= 1, column= 1)
+    loadExcelButton.grid(row= 1, column= 2)
+    loadDropListButton.grid(row= 2, column= 1)
+    loadKeywordsButton.grid(row= 2, column= 2)
+    generateDropLogButton.grid(row= 3, column= 1, columnspan= 2)
+    createNewWorkbookButton.grid(row= 4, column= 1)
+    isVerboseButton.grid(row= 4, column= 2)
+
     frame2.columnconfigure(1, weight= 1)
     frame2.columnconfigure(2, weight= 1)
-    ttk.Label(master= frame2, text= 'Selected Excel template:', width= 25).grid(row= 1, column= 1, sticky= 'w')
-    showCurrentExcelLabel.grid(row= 1, column= 2, sticky= 'w')
-    ttk.Label(master= frame2, text= 'Selected drop list file:', width= 25).grid(row= 2, column= 1, sticky= 'w')
-    showCurrentDropListLabel.grid(row= 2, column= 2, sticky= 'w')
-    ttk.Label(master= frame2, text= 'Selected keywords file:', width= 25).grid(row= 3, column= 1, sticky= 'w')
-    showCurrentKeywordsLabel.grid(row= 3, column= 2, sticky= 'w')
+    ttk.Label(master= frame2, text= 'Tesseract install location:', width= 25).grid(row= 1, column= 1, sticky= 'w')
+    showTesseractInstallLabel.grid(row= 1, column= 2, sticky= 'w')
+    ttk.Label(master= frame2, text= 'Selected Excel template:', width= 25).grid(row= 2, column= 1, sticky= 'w')
+    showCurrentExcelLabel.grid(row= 2, column= 2, sticky= 'w')
+    ttk.Label(master= frame2, text= 'Selected drop list file:', width= 25).grid(row= 3, column= 1, sticky= 'w')
+    showCurrentDropListLabel.grid(row= 3, column= 2, sticky= 'w')
+    ttk.Label(master= frame2, text= 'Selected keywords file:', width= 25).grid(row= 4, column= 1, sticky= 'w')
+    showCurrentKeywordsLabel.grid(row= 4, column= 2, sticky= 'w')
     
     frame3.rowconfigure(0, weight= 1)
     frame3.columnconfigure(0, weight= 1)
