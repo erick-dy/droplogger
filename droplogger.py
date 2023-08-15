@@ -3,7 +3,7 @@ import configparser as cp, cv2, numpy as np, openpyxl, pandas as pd, pytesseract
 from copy import copy
 from openpyxl.styles import Alignment
 from openpyxl.utils.dataframe import dataframe_to_rows
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from tkinter.filedialog import askopenfilename, askopenfilenames, asksaveasfilename
 
 class TextRedirector(object):
@@ -18,16 +18,20 @@ class TextRedirector(object):
         self.tb.see(tk.END)
         self.tb.configure(state= 'disabled')
 
-def generateDropLog(tb, tesspath, xltf, dlf, kwf, isVerbose, createNewWorkbook):
+def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, createNewWorkbook):
     bosses = ['Lotus', 'Damien', 'Lucid', 'Will', 'Divine King Slime', 'Dusk', 'Djunkel', 'Heretic Hilla', 'Black Mage', 'Seren', 'Kalos', 'Kaling']
-    pytesseract.pytesseract.tesseract_cmd = tesspath.get()
-    xltfile = xltf.get()
-    dlfile = dlf.get()
-    kwfile = kwf.get()
     keywords = []
     images = []
     time = datetime.datetime.now()
     
+    pytesseract.pytesseract.tesseract_cmd = tesspath.get()
+    xltfile = xltf.get()
+    kwfile = kwf.get()
+    
+    if pytesseract.pytesseract.tesseract_cmd == '' or xltfile == '' or kwfile == '':
+        messagebox.showwarning(title= 'Files not selected', message= 'Please specify a path to tesseract.exe, an Excel template and keywords text file before attempting to generate an Excel sheet.')
+        return
+
     tb.configure(state="normal")
     tb.delete(1.0, tk.END)
     tb.configure(state="disabled")
@@ -76,9 +80,10 @@ def generateDropLog(tb, tesspath, xltf, dlf, kwf, isVerbose, createNewWorkbook):
         if isVerbose is True:
             print('Tesseract output:', dash := '----------------------------------------', *drops, dash, sep='\n')
         
-        with open(dlfile) as dl:
-            for line in dl:
-                drop_list[line.rstrip('\n')] = 0
+        for i, item in enumerate(df.Item.values.tolist(), start= 2): # Skip the first two items in the Excel template as they have preset values
+            if item == None:
+                break
+            drop_list[item] = 0
         
         for b in bosses:
             if b.casefold() in img_name.casefold():
@@ -154,15 +159,21 @@ def setBoolean(cfg, bool, boolname):
         cfg.write(cfgfile)
 
 def readFile(cfg, label, filevar, filename, Title, types):
+    old_filename = filename.get()
     filename.set(askopenfilename(title= Title, initialdir= os.getcwd(), filetypes= types))
-    cfg.set('Files', filevar, filename.get())
-    label.config(text= filename.get())
-    with open('dlconfig.ini', 'w') as cfgfile:
-        cfg.write(cfgfile)
+    if filename.get() == '' or filename == None:
+        filename.set(old_filename)
+        return
+    else:
+        cfg.set('Files', filevar, filename.get())
+        label.config(text= filename.get())
+        with open('dlconfig.ini', 'w') as cfgfile:
+            cfg.write(cfgfile)
 
 def main():
+    version = '1.1.1'
     window = tk.Tk()
-    window.title('Drop Logging Tool')
+    window.title('Drop Logging Tool v' + version)
     window.minsize(971, 600)
     window.resizable(True, True)
     frame1 = tk.Frame(master= window)
@@ -172,7 +183,6 @@ def main():
     isVerbose = tk.BooleanVar(window)
     tessinstall = tk.StringVar(window)
     xltfile = tk.StringVar(window)
-    dlfile = tk.StringVar(window)
     kwfile = tk.StringVar(window)
     cfg = cp.ConfigParser()
     
@@ -182,7 +192,6 @@ def main():
         booleans = cfg['Booleans']
         tessinstall.set(files['tesseract_install'])
         xltfile.set(files['xltfile'])
-        dlfile.set(files['dlfile'])
         kwfile.set(files['kwfile'])
         createNewWorkbook.set(booleans.getboolean('createNewWorkbook'))
         isVerbose.set(booleans.getboolean('isVerbose'))
@@ -194,9 +203,9 @@ def main():
         elif os.path.exists(os.getenv('LOCALAPPDATA') + r'\Programs\Tesseract-OCR\tesseract.exe'):
             cfg.set('Files', 'tesseract_install', os.getenv('LOCALAPPDATA') + r'\Programs\Tesseract-OCR\tesseract.exe')
         else:
+            messagebox.showwarning(title= 'Tesseract not found', message= 'DLT was unable to find tesseract.exe in its default install location, please manually locate it before attempting to generate any Excel sheets.')
             cfg.set('Files', 'tesseract_install', '')
         cfg.set('Files', 'xltfile', '')
-        cfg.set('Files', 'dlfile', '')
         cfg.set('Files', 'kwfile', '')
         cfg.set('Booleans', 'createNewWorkbook', 'False')
         cfg.set('Booleans', 'isVerbose', 'False')
@@ -205,17 +214,15 @@ def main():
     
     showTesseractInstallLabel = ttk.Label(master= frame2, text= tessinstall.get())
     showCurrentExcelLabel = ttk.Label(master= frame2, text= xltfile.get())
-    showCurrentDropListLabel = ttk.Label(master= frame2, text= dlfile.get())
     showCurrentKeywordsLabel = ttk.Label(master= frame2, text= kwfile.get())
     
     locateTesseractInstallButton = ttk.Button(master= frame1, text= 'Locate Tesseract installation', width= 30, command= lambda: readFile(cfg, showTesseractInstallLabel, 'tesseract_install', tessinstall, 'Locate Tesseract installation', [('Executable files', '.exe')]))
     loadExcelButton = ttk.Button(master= frame1, text= 'Load Excel template', width= 30, command= lambda: readFile(cfg, showCurrentExcelLabel, 'xltfile', xltfile, 'Select Excel template', [('Template', '.xltx'), ('Template (code)', '.xltm'), ('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')]))
-    loadDropListButton = ttk.Button(master= frame1, text= 'Load drop list', width= 30, command= lambda: readFile(cfg, showCurrentDropListLabel, 'dlfile', dlfile, 'Select drop list text file', [('Text file', '.txt'), ('All files', '.*')]))
     loadKeywordsButton = ttk.Button(master= frame1, text= 'Load keywords', width= 30, command= lambda: readFile(cfg, showCurrentKeywordsLabel, 'kwfile', kwfile, 'Select keywords text file', [('Text file', '.txt'), ('All files', '.*')]))
     isVerboseButton = ttk.Checkbutton(master= frame1, text= 'Verbose', variable= isVerbose, command= lambda: setBoolean(cfg, str(isVerbose.get()), 'isVerbose'))
     createNewWorkbookButton = ttk.Checkbutton(master= frame1, text= 'Create new Excel Workbook', variable= createNewWorkbook, command= lambda: setBoolean(cfg, str(createNewWorkbook.get()), 'createNewWorkbook'))
     
-    generateDropLogButton = ttk.Button(master= frame1, text= 'Generate Excel sheet', width= 30, command= lambda: generateDropLog(textbox, tessinstall, xltfile, dlfile, kwfile, isVerbose.get(), createNewWorkbook.get()))
+    generateDropLogButton = ttk.Button(master= frame2, text= 'Generate Excel sheet', width= 30, command= lambda: generateDropLog(textbox, tessinstall, xltfile, kwfile, isVerbose.get(), createNewWorkbook.get()))
     textbox = tk.Text(master= frame3, font= ('Consolas', 10), wrap= tk.NONE, state= 'disabled')
     vert_scrollbar = ttk.Scrollbar(master= frame3, orient= 'vertical', command= textbox.yview)
     hori_scrollbar = ttk.Scrollbar(master= frame3, orient= 'horizontal', command= textbox.xview)
@@ -224,24 +231,21 @@ def main():
     frame2.pack()
     frame3.pack(side= 'bottom', fill= 'both', expand= True)
     
-    locateTesseractInstallButton.grid(row= 1, column= 1)
-    loadExcelButton.grid(row= 1, column= 2)
-    loadDropListButton.grid(row= 2, column= 1)
-    loadKeywordsButton.grid(row= 2, column= 2)
-    generateDropLogButton.grid(row= 3, column= 1, columnspan= 2)
-    createNewWorkbookButton.grid(row= 4, column= 1)
-    isVerboseButton.grid(row= 4, column= 2)
+    locateTesseractInstallButton.grid(row= 1, column= 1, pady= 5)
+    loadExcelButton.grid(row= 1, column= 2, pady= 5)
+    loadKeywordsButton.grid(row= 1, column= 3, pady= 5)
+    createNewWorkbookButton.grid(row= 2, column= 1, columnspan= 2)
+    isVerboseButton.grid(row= 2, column= 2, columnspan= 2)
 
     frame2.columnconfigure(1, weight= 1)
     frame2.columnconfigure(2, weight= 1)
-    ttk.Label(master= frame2, text= 'Tesseract install location:', width= 25).grid(row= 1, column= 1, sticky= 'w')
-    showTesseractInstallLabel.grid(row= 1, column= 2, sticky= 'w')
+    ttk.Label(master= frame2, text= 'Tesseract install location:', width= 25).grid(row= 1, column= 1, sticky= 'w', pady= (5, 0))
+    showTesseractInstallLabel.grid(row= 1, column= 2, sticky= 'w', pady= (5, 0))
     ttk.Label(master= frame2, text= 'Selected Excel template:', width= 25).grid(row= 2, column= 1, sticky= 'w')
     showCurrentExcelLabel.grid(row= 2, column= 2, sticky= 'w')
-    ttk.Label(master= frame2, text= 'Selected drop list file:', width= 25).grid(row= 3, column= 1, sticky= 'w')
-    showCurrentDropListLabel.grid(row= 3, column= 2, sticky= 'w')
-    ttk.Label(master= frame2, text= 'Selected keywords file:', width= 25).grid(row= 4, column= 1, sticky= 'w')
-    showCurrentKeywordsLabel.grid(row= 4, column= 2, sticky= 'w')
+    ttk.Label(master= frame2, text= 'Selected keywords file:', width= 25).grid(row= 3, column= 1, sticky= 'w', pady= (0, 5))
+    showCurrentKeywordsLabel.grid(row= 3, column= 2, sticky= 'w', pady= (0, 5))
+    generateDropLogButton.grid(row= 4, column= 1, columnspan= 3, pady= (5, 10))
     
     frame3.rowconfigure(0, weight= 1)
     frame3.columnconfigure(0, weight= 1)
@@ -253,6 +257,9 @@ def main():
     sys.stdout = TextRedirector(textbox, 'stdout')
     sys.stderr = TextRedirector(textbox, 'stderr')
     
+    print('sheep_doge\'s Drop Logging Tool version', version)
+    print('BAA!')
+    print('\n--------------------\n')
     print('Ready')
     window.mainloop()
 
