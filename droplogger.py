@@ -71,7 +71,7 @@ def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, createNewWorkbook):
         # Pass processed image to Tesseract OCR
         print('Detecting text in', img_name, '... ', end= '')
         output = pytesseract.image_to_string(blur, lang= 'eng',config= '--psm 4 --oem 1')
-        rep1 = re.sub('v¥|¥V|WY|YY|VV|VY|vY|WV|vv|“W|“v', 'W', output) # This regex corrects the problematic capital W in the source image
+        rep1 = re.sub('v¥|¥V|WY|YY|VV|VY|vY|WV|vv|“W|“Y|“v', 'W', output) # This regex corrects the problematic capital W in the source image
         rep2 = re.sub('vy', 'w', rep1)
         drops = rep2.split('\n')
         drops = list(filter(None, drops))
