@@ -5,6 +5,7 @@ from openpyxl.styles import Alignment
 from openpyxl.utils.dataframe import dataframe_to_rows
 from tkinter import messagebox, ttk
 from tkinter.filedialog import askopenfilename, askopenfilenames, asksaveasfilename
+from tkinter.simpledialog import askinteger
 
 class TextRedirector(object):
     def __init__(self, tb, tag= 'stdout'):
@@ -18,33 +19,36 @@ class TextRedirector(object):
         self.tb.see(tk.END)
         self.tb.configure(state= 'disabled')
 
-def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, createNewWorkbook):
-    bosses = ['Lotus', 'Damien', 'Lucid', 'Will', 'Divine King Slime', 'Dusk', 'Djunkel', 'Heretic Hilla', 'Black Mage', 'Seren', 'Kalos', 'Kaling']
-    keywords = []
-    images = []
-    time = datetime.datetime.now()
-    
-    pytesseract.pytesseract.tesseract_cmd = tesspath.get()
-    xltfile = xltf.get()
-    kwfile = kwf.get()
-    
-    if pytesseract.pytesseract.tesseract_cmd == '' or xltfile == '' or kwfile == '':
-        messagebox.showwarning(title= 'Files not selected', message= 'Please specify a path to tesseract.exe, an Excel template and keywords text file before attempting to generate an Excel sheet.')
-        return
-
+def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, option):
     tb.configure(state= 'normal')
     tb.delete(1.0, tk.END)
     tb.configure(state= 'disabled')
+
+    if option == 'updateExistingSheet':
+        if messagebox.askokcancel(icon= 'warning', title= 'Caution', message= 'Update mode is currently selected, which EDITS a loaded Excel sheet instead of generating a new one.\n\nALL CHANGES ARE IRREVERSIBLE.\nONLY PROCEED IF YOU KNOW WHAT YOU ARE DOING!\n\nPress OK to proceed, or Cancel to abort.'):
+            xltfile = askopenfilename(title= 'Select Excel Workbook to update', initialdir= os.getcwd(), filetypes= [('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')])
+            wb, ws, df = createDataFrame(xltfile)
+            ws = wb[wb.sheetnames[askinteger(title= 'Select sheet', prompt= 'Enter the number of the sheet to edit (0 to {}):'.format(len(wb.sheetnames) - 1))]]
+        else:
+            return
+    else:
+        xltfile = xltf.get()
+        wb, ws, df = createDataFrame(xltfile)
+        time = datetime.datetime.now()
+        ws.title = time.strftime('%d %b %Y %H-%M')
+    kwfile = kwf.get()
+    pytesseract.pytesseract.tesseract_cmd = tesspath.get()
     
-    wb, ws, df = createDataFrame(xltfile)
-    ws.title = time.strftime('%d %b %Y %H-%M')
+    bosses = ['Lotus', 'Damien', 'Lucid', 'Will', 'Divine King Slime', 'Dusk', 'Djunkel', 'Heretic Hilla', 'Black Mage', 'Seren', 'Kalos', 'Kaling']
+    keywords = []
+    images = []
     
     try:
         images.extend(askopenfilenames(title= 'Select image files to process', initialdir= os.getcwd(), filetypes= [('Image files', '.jpg .jpeg .png .bmp .tiff')]))
         if len(images) == 0:
             raise FileNotFoundError('No image file(s) selected!')
     except FileNotFoundError as e:
-        print(e)
+        print(e, '\nOperation aborted.')
         return
     with open(kwfile) as kw:
         for line in kw:
@@ -80,7 +84,7 @@ def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, createNewWorkbook):
         if isVerbose is True:
             print('Tesseract output:', dash := '----------------------------------------', *drops, dash, sep= '\n')
         
-        for i, item in enumerate(df.Item.values.tolist(), start= 2): # Skip the first two items in the Excel template as they have preset values
+        for i, item in enumerate(df.Item.values.tolist()):
             if item == None:
                 break
             drop_list[item] = 0
@@ -112,16 +116,8 @@ def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, createNewWorkbook):
     # Write DataFrame contents to Excel sheet
     rows = dataframe_to_rows(df, index= False)
 
-    if createNewWorkbook is True:
-        for r, row in enumerate(rows, 1):
-            for c, value in enumerate(row, 1):
-                ws.cell(row= r, column= c, value= value).alignment = Alignment(horizontal= 'center', wrap_text= True)
-        wb.template = False
-        print('Writing extracted drop data to new Workbook:', (os.path.basename(xl := asksaveasfilename(title= 'Create new Excel Workbook', filetypes= [('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')], defaultextension= '.xlsx'))), '... ', end= '')
-        wb.save(xl)
-        print('Done!')
-    else:
-        # Default behaviour creates a new sheet in an existing Workbook
+    if option == 'appendSheet':
+        # Default behaviour, creates a new sheet and appends it to an existing Workbook
         wb2 = openpyxl.load_workbook(xl := askopenfilename(title= 'Select Excel Workbook to write new sheet to', initialdir= os.getcwd(), filetypes= [('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')]))
         ws2 = wb2.create_sheet(time.strftime('%d %b %Y %H-%M')) # Sheets cannot be copied wholesale between two different Workbooks
         ws2.freeze_panes = 'F1'
@@ -140,6 +136,24 @@ def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, createNewWorkbook):
         wb2.template = False
         print('Writing extracted drop data to', os.path.basename(xl),'... ', end= '')
         wb2.save(xl)
+        print('Done!')
+    
+    elif option == 'createNewWorkbook':
+        for r, row in enumerate(rows, 1):
+            for c, value in enumerate(row, 1):
+                ws.cell(row= r, column= c, value= value).alignment = Alignment(horizontal= 'center', wrap_text= True)
+        wb.template = False
+        print('Writing extracted drop data to new Workbook:', (os.path.basename(xl := asksaveasfilename(title= 'Create new Excel Workbook', filetypes= [('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')], defaultextension= '.xlsx'))), '... ', end= '')
+        wb.save(xl)
+        print('Done!')
+    
+    elif option == 'updateExistingSheet':
+        for r, row in enumerate(rows, 1):
+            for c, value in enumerate(row, 1):
+                ws.cell(row= r, column= c, value= value).alignment = Alignment(horizontal= 'center', wrap_text= True)
+        wb.template = False
+        print('Updating', os.path.basename(xltfile),'... ', end= '')
+        wb.save(xltfile)
         print('Done!')
   
 # Create a Pandas DataFrame using an Excel template  
@@ -171,7 +185,7 @@ def readFile(cfg, label, filevar, filename, Title, types):
             cfg.write(cfgfile)
 
 def main():
-    version = '1.1.1'
+    version = '1.2'
     window = tk.Tk()
     window.title('Drop Logging Tool v' + version)
     window.minsize(971, 600)
@@ -179,11 +193,12 @@ def main():
     frame1 = tk.Frame(master= window)
     frame2 = tk.Frame(master= window)
     frame3 = tk.Frame(master= window)
-    createNewWorkbook = tk.BooleanVar(window)
+    options = {'Append': 'appendSheet', 'Create': 'createNewWorkbook', 'Update': 'updateExistingSheet'}
+    option = tk.StringVar(window, value= options['Append'])
     isVerbose = tk.BooleanVar(window)
-    tessinstall = tk.StringVar(window)
-    xltfile = tk.StringVar(window)
-    kwfile = tk.StringVar(window)
+    tessinstall = tk.StringVar(window, value= 'Not selected')
+    xltfile = tk.StringVar(window, value= 'Not selected')
+    kwfile = tk.StringVar(window, value= 'Not selected')
     cfg = cp.ConfigParser()
     
     try:
@@ -193,7 +208,6 @@ def main():
         tessinstall.set(files['tesseract_install'])
         xltfile.set(files['xltfile'])
         kwfile.set(files['kwfile'])
-        createNewWorkbook.set(booleans.getboolean('createNewWorkbook'))
         isVerbose.set(booleans.getboolean('isVerbose'))
     except (FileNotFoundError, KeyError) as e:
         cfg.add_section('Files')
@@ -207,7 +221,6 @@ def main():
             cfg.set('Files', 'tesseract_install', '')
         cfg.set('Files', 'xltfile', '')
         cfg.set('Files', 'kwfile', '')
-        cfg.set('Booleans', 'createNewWorkbook', 'False')
         cfg.set('Booleans', 'isVerbose', 'False')
         with open('dlconfig.ini', 'w') as cfgfile:
             cfg.write(cfgfile)
@@ -220,9 +233,11 @@ def main():
     showCurrentExcelLabel = ttk.Label(master= frame1, text= xltfile.get())
     showCurrentKeywordsLabel = ttk.Label(master= frame1, text= kwfile.get())
 
-    generateDropLogButton = ttk.Button(master= frame2, text= 'Generate Excel sheet', width= 30, command= lambda: generateDropLog(textbox, tessinstall, xltfile, kwfile, isVerbose.get(), createNewWorkbook.get()))
+    generateDropLogButton = ttk.Button(master= frame2, text= 'Generate Excel sheet', width= 30, command= lambda: generateDropLog(textbox, tessinstall, xltfile, kwfile, isVerbose.get(), option.get()))
     isVerboseButton = ttk.Checkbutton(master= frame2, text= 'Verbose', variable= isVerbose, command= lambda: setBoolean(cfg, str(isVerbose.get()), 'isVerbose'))
-    createNewWorkbookButton = ttk.Checkbutton(master= frame2, text= 'Create new Excel Workbook', variable= createNewWorkbook, command= lambda: setBoolean(cfg, str(createNewWorkbook.get()), 'createNewWorkbook'))
+    appendSheetButton = ttk.Radiobutton(master= frame2, text= 'Append sheet to existing Workbook', variable= option, value= options['Append'], command= lambda: loadExcelButton.config(state= 'enabled'))
+    createNewWorkbookButton = ttk.Radiobutton(master= frame2, text= 'Create new Workbook', variable= option, value= options['Create'], command= lambda: loadExcelButton.config(state= 'enabled'))
+    updateExistingSheetButton = ttk.Radiobutton(master= frame2, text= 'Update existing sheet', variable= option, value= options['Update'], command= lambda: loadExcelButton.config(state= 'disabled'))
     
     textbox = tk.Text(master= frame3, font= ('Consolas', 10), wrap= tk.NONE, state= 'disabled')
     vert_scrollbar = ttk.Scrollbar(master= frame3, orient= 'vertical', command= textbox.yview)
@@ -245,8 +260,10 @@ def main():
     showCurrentKeywordsLabel.grid(row= 3, column= 2, sticky= 'w', pady= 5)
 
     generateDropLogButton.grid(row= 1, column= 1, columnspan= 2, pady= (10, 5))
-    createNewWorkbookButton.grid(row= 2, column= 1, padx= (0, 10), pady= (0, 10))
-    isVerboseButton.grid(row= 2, column= 2, padx= (10, 0), pady= (0, 10))
+    isVerboseButton.grid(row= 1, column= 2, columnspan= 2, pady= (10, 5))
+    appendSheetButton.grid(row= 2, column= 1, padx= (0, 10), pady= (0, 10))
+    createNewWorkbookButton.grid(row= 2, column= 2, padx= 10, pady= (0, 10))
+    updateExistingSheetButton.grid(row= 2, column= 3, padx= 10, pady= (0, 10))
     
     frame3.rowconfigure(0, weight= 1)
     frame3.columnconfigure(0, weight= 1)
