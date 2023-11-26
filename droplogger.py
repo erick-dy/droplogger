@@ -186,7 +186,7 @@ def readFile(cfg, label, filevar, filename, Title, types):
             cfg.write(cfgfile)
 
 def main():
-    version = '1.2'
+    version = '1.2.1'
     window = tk.Tk()
     window.title('Drop Logging Tool v' + version)
     window.minsize(971, 600)
