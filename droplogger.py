@@ -27,13 +27,17 @@ def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, option):
     if option == 'updateExistingSheet':
         if messagebox.askokcancel(icon= 'warning', title= 'Caution', message= 'Update mode is currently selected, which EDITS a loaded Excel sheet instead of generating a new one.\n\nALL CHANGES ARE IRREVERSIBLE.\nONLY PROCEED IF YOU KNOW WHAT YOU ARE DOING!\n\nPress OK to proceed, or Cancel to abort.'):
             xltfile = askopenfilename(title= 'Select Excel Workbook to update', initialdir= os.getcwd(), filetypes= [('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')])
-            wb, ws, df = createDataFrame(xltfile)
+            wb = openpyxl.load_workbook(xltfile)
+            print('Excel template loaded:', os.path.basename(xltfile), '\n')
             ws = wb[wb.sheetnames[askinteger(title= 'Select sheet', prompt= 'Enter the number of the sheet to edit (0 to {}):'.format(len(wb.sheetnames) - 1))]]
+            df = createDataFrame(wb, ws)
         else:
             return
     else:
         xltfile = xltf.get()
-        wb, ws, df = createDataFrame(xltfile)
+        wb = openpyxl.load_workbook(xltfile)
+        ws = wb[wb.sheetnames[0]]
+        df = createDataFrame(wb, ws)
         time = datetime.datetime.now()
         ws.title = time.strftime('%d %b %Y %H-%M')
     kwfile = kwf.get()
@@ -157,15 +161,12 @@ def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, option):
         print('Done!')
   
 # Create a Pandas DataFrame using an Excel template  
-def createDataFrame(xltfile):
-    wb = openpyxl.load_workbook(xltfile)
-    print('Excel template loaded:', os.path.basename(xltfile), '\n')
-    ws = wb[wb.sheetnames[0]]
+def createDataFrame(wb, ws):
     df = pd.DataFrame(ws.values)
     columnNames = df.iloc[0]
     df = df[1:]
     df.columns = columnNames
-    return (wb, ws, df)
+    return df
 
 def setBoolean(cfg, bool, boolname):
     cfg.set('Booleans', boolname, bool)
