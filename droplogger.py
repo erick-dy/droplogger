@@ -19,7 +19,15 @@ class TextRedirector(object):
         self.tb.see(tk.END)
         self.tb.configure(state= 'disabled')
 
-def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, option):
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath('.')
+
+    return os.path.join(base_path, relative_path)
+
+def generateDropLog(tb, bosses, xltf, kwf, isVerbose, option):
     tb.configure(state= 'normal')
     tb.delete(1.0, tk.END)
     tb.configure(state= 'disabled')
@@ -41,9 +49,8 @@ def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, option):
         time = datetime.datetime.now()
         ws.title = time.strftime('%d %b %Y %H-%M')
     kwfile = kwf.get()
-    pytesseract.pytesseract.tesseract_cmd = tesspath.get()
+    pytesseract.pytesseract.tesseract_cmd = resource_path('tess\\tesseract.exe')
     
-    bosses = ['Lotus', 'Damien', 'Lucid', 'Will', 'Divine King Slime', 'Dusk', 'Djunkel', 'Heretic Hilla', 'Black Mage', 'Seren', 'Kalos', 'Kaling']
     keywords = []
     images = []
     
@@ -112,11 +119,11 @@ def generateDropLog(tb, tesspath, xltf, kwf, isVerbose, option):
                         if f'{key}' in df.at[row + 1, 'Item']:
                             df.at[row + 1, b] = val + df.at[row + 1, b] if (df.at[row + 1, b] is not None) else val
                 print('Done!\n')
-    
+    '''
     if isVerbose is True:
         with pd.option_context('expand_frame_repr', False, 'display.max_rows', None, 'display.max_columns', None, 'display.width', 0, 'display.max_colwidth', 0):
             print(df, end= '\n\n')
-    
+    '''
     # Write DataFrame contents to Excel sheet
     rows = dataframe_to_rows(df, index= False)
 
@@ -186,7 +193,7 @@ def readFile(cfg, label, filevar, filename, Title, types):
             cfg.write(cfgfile)
 
 def main():
-    version = '1.2.1'
+    version = '1.3'
     window = tk.Tk()
     window.title('Drop Logging Tool v' + version)
     window.minsize(971, 600)
@@ -197,44 +204,38 @@ def main():
     options = {'Append': 'appendSheet', 'Create': 'createNewWorkbook', 'Update': 'updateExistingSheet'}
     option = tk.StringVar(window, value= options['Append'])
     isVerbose = tk.BooleanVar(window)
-    tessinstall = tk.StringVar(window, value= 'Not selected')
     xltfile = tk.StringVar(window, value= 'Not selected')
     kwfile = tk.StringVar(window, value= 'Not selected')
+    bosslist = []
     cfg = cp.ConfigParser()
     
     try:
         cfg.read('dlconfig.ini')
         files = cfg['Files']
         booleans = cfg['Booleans']
-        tessinstall.set(files['tesseract_install'])
+        bosses = cfg['Bosses']
         xltfile.set(files['xltfile'])
         kwfile.set(files['kwfile'])
         isVerbose.set(booleans.getboolean('isVerbose'))
+        bosslist = bosses['bosses'].split(',')
     except (FileNotFoundError, KeyError) as e:
         cfg.add_section('Files')
         cfg.add_section('Booleans')
-        if os.path.exists(os.getenv('LOCALAPPDATA') + r'\Tesseract-OCR\tesseract.exe'):
-            cfg.set('Files', 'tesseract_install', os.getenv('LOCALAPPDATA') + r'\Tesseract-OCR\tesseract.exe')
-        elif os.path.exists(os.getenv('LOCALAPPDATA') + r'\Programs\Tesseract-OCR\tesseract.exe'):
-            cfg.set('Files', 'tesseract_install', os.getenv('LOCALAPPDATA') + r'\Programs\Tesseract-OCR\tesseract.exe')
-        else:
-            messagebox.showwarning(title= 'Tesseract not found', message= 'DLT was unable to find tesseract.exe in its default install location, please manually locate it before attempting to generate any Excel sheets.')
-            cfg.set('Files', 'tesseract_install', '')
+        cfg.add_section('Bosses')
         cfg.set('Files', 'xltfile', '')
         cfg.set('Files', 'kwfile', '')
         cfg.set('Booleans', 'isVerbose', 'False')
+        cfg.set('Bosses', 'bosses', 'Lotus, Damien, Lucid, Will, Divine King Slime, Dusk, Djunkel, Heretic Hilla, Black Mage, Seren, Kalos, Kaling')
         with open('dlconfig.ini', 'w') as cfgfile:
             cfg.write(cfgfile)
     
-    locateTesseractInstallButton = ttk.Button(master= frame1, text= 'Tesseract installation', width= 20, command= lambda: readFile(cfg, showTesseractInstallLabel, 'tesseract_install', tessinstall, 'Locate Tesseract installation', [('Executable files', '.exe')]))
     loadExcelButton = ttk.Button(master= frame1, text= 'Excel template', width= 20, command= lambda: readFile(cfg, showCurrentExcelLabel, 'xltfile', xltfile, 'Select Excel template', [('Template', '.xltx'), ('Template (code)', '.xltm'), ('Excel Workbook', '.xlsx'), ('Excel 97- Excel 2003 Workbook', '.xls')]))
     loadKeywordsButton = ttk.Button(master= frame1, text= 'Keywords', width= 20, command= lambda: readFile(cfg, showCurrentKeywordsLabel, 'kwfile', kwfile, 'Select keywords text file', [('Text file', '.txt'), ('All files', '.*')]))
 
-    showTesseractInstallLabel = ttk.Label(master= frame1, text= tessinstall.get())
     showCurrentExcelLabel = ttk.Label(master= frame1, text= xltfile.get())
     showCurrentKeywordsLabel = ttk.Label(master= frame1, text= kwfile.get())
 
-    generateDropLogButton = ttk.Button(master= frame2, text= 'Generate Excel sheet', width= 30, command= lambda: generateDropLog(textbox, tessinstall, xltfile, kwfile, isVerbose.get(), option.get()))
+    generateDropLogButton = ttk.Button(master= frame2, text= 'Generate Excel sheet', width= 30, command= lambda: generateDropLog(textbox, bosslist, xltfile, kwfile, isVerbose.get(), option.get()))
     isVerboseButton = ttk.Checkbutton(master= frame2, text= 'Verbose', variable= isVerbose, command= lambda: setBoolean(cfg, str(isVerbose.get()), 'isVerbose'))
     appendSheetButton = ttk.Radiobutton(master= frame2, text= 'Append sheet to existing Workbook', variable= option, value= options['Append'], command= lambda: loadExcelButton.config(state= 'enabled'))
     createNewWorkbookButton = ttk.Radiobutton(master= frame2, text= 'Create new Workbook', variable= option, value= options['Create'], command= lambda: loadExcelButton.config(state= 'enabled'))
@@ -251,14 +252,11 @@ def main():
     frame1.columnconfigure(1, weight= 1)
     frame1.columnconfigure(2, weight= 1, minsize= 400)
 
-    locateTesseractInstallButton.grid(row= 1, column= 1, padx= (0, 10), pady= (15, 5))
-    showTesseractInstallLabel.grid(row= 1, column= 2, sticky= 'w', pady= (15, 5))
+    loadExcelButton.grid(row= 1, column= 1, padx= (0, 10), pady= (15, 5))
+    showCurrentExcelLabel.grid(row= 1, column= 2, sticky= 'w', pady= (15, 5))
 
-    loadExcelButton.grid(row= 2, column= 1, padx= (0, 10))
-    showCurrentExcelLabel.grid(row= 2, column= 2, sticky= 'w')
-
-    loadKeywordsButton.grid(row= 3, column= 1, padx= (0, 10), pady= 5)
-    showCurrentKeywordsLabel.grid(row= 3, column= 2, sticky= 'w', pady= 5)
+    loadKeywordsButton.grid(row= 2, column= 1, padx= (0, 10), pady= 5)
+    showCurrentKeywordsLabel.grid(row= 2, column= 2, sticky= 'w', pady= 5)
 
     generateDropLogButton.grid(row= 1, column= 1, columnspan= 2, pady= (10, 5))
     isVerboseButton.grid(row= 1, column= 2, columnspan= 2, pady= (10, 5))
@@ -276,8 +274,7 @@ def main():
     sys.stdout = TextRedirector(textbox, 'stdout')
     sys.stderr = TextRedirector(textbox, 'stderr')
     
-    print('sheep_doge\'s Drop Logging Tool version', version)
-    print('BAA!')
+    print('Drop Logging Tool version', version)
     print('\n--------------------\n')
     print('Ready')
     window.mainloop()
