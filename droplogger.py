@@ -226,6 +226,7 @@ def main():
         cfg.set('Files', 'kwfile', '')
         cfg.set('Booleans', 'isVerbose', 'False')
         cfg.set('Bosses', 'bosses', 'Lotus, Damien, Lucid, Will, Divine King Slime, Dusk, Djunkel, Heretic Hilla, Black Mage, Seren, Kalos, Kaling')
+        bosslist = ['Lotus', 'Damien', 'Lucid', 'Will', 'Divine King Slime', 'Dusk', 'Djunkel', 'Heretic Hilla', 'Black Mage', 'Seren', 'Kalos', 'Kaling']
         with open('dlconfig.ini', 'w') as cfgfile:
             cfg.write(cfgfile)
     
