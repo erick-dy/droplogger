@@ -217,7 +217,7 @@ def main():
         xltfile.set(files['xltfile'])
         kwfile.set(files['kwfile'])
         isVerbose.set(booleans.getboolean('isVerbose'))
-        bosslist = bosses['bosses'].split(',')
+        bosslist = bosses['bosses'].split(', ')
     except (FileNotFoundError, KeyError) as e:
         cfg.add_section('Files')
         cfg.add_section('Booleans')
